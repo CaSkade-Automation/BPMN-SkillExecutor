@@ -8,6 +8,9 @@ import org.camunda.connect.httpclient.HttpConnector;
 import org.camunda.connect.httpclient.HttpResponse;
 
 import com.google.gson.*;
+import com.google.gson.reflect.TypeToken;
+
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -16,7 +19,9 @@ import io.socket.client.IO;
 import io.socket.client.Socket;
 import io.socket.emitter.Emitter;
 
-import java.util.Random;
+import java.lang.reflect.Type;
+import java.util.ArrayList;
+import java.util.List;
 
 public class MyJavaDelegate implements JavaDelegate {
 	
@@ -27,19 +32,16 @@ public class MyJavaDelegate implements JavaDelegate {
 	private static String CONNECTOR = "http-connector";
 	private static String EXECUTION_URL = "http://localhost:9090/api/skill-executions";
 	private static String COMMAND_TYPE_IRI_RESET = "http://www.hsu-ifa.de/ontologies/ISA-TR88#Reset_Command";
+	private static String COMMAND_TYPE_IRI_GETOUTPUTS = "http://www.hsu-ifa.de/ontologies/capability-model#GetOutputs";
 	private static String CONTENT_TYPE = "application/json";
 	
 	// Error codes
 	private static String ERROR_ABBORTING = "Error_Status_Abborting";
-	private static String ERROR_ABBORTED = "Error_Status_Abborted";
 	private static String ERROR_STOPPING = "Error_Status_Stopping";
-	private static String ERROR_STOPPED = "Error_Status_Stopped";
-	private static String ERROR_HOLDING = "Error_Status_Holding";
-	private static String ERROR_HELD = "Error_Status_Held";
 	
 	// Loading during runtime
 	private Boolean isSelfResetting = false;
-	protected stateTypeIri status = stateTypeIri.Tba;
+	private stateTypeIri status = stateTypeIri.Tba;
 	
 	
 	public void execute(DelegateExecution execution) throws Exception {
@@ -114,42 +116,47 @@ public class MyJavaDelegate implements JavaDelegate {
 		        .contentType(CONTENT_TYPE)
 		        .payload(gson.toJson(skillParameter))
 	        .execute();
-		System.out.println("Response: \n" + response);
+		System.out.println("Response execution: \n" + response);
 		System.out.println("Sending http request complete");
 		
 		/***** Keep thread alive until complete or aborted *****/ 
+		SkillParameter getOutputs = new SkillParameter();
+		getOutputs.setCommandTypeIri(COMMAND_TYPE_IRI_GETOUTPUTS);
+		getOutputs.setSkillIri(skillParameter.getSkillIri());
+		
 		while (true) {
-			if (status == stateTypeIri.Complete) {
-				System.out.println("Task " + execution.getCurrentActivityName() + " completed");
-				break;
-			} else if (status == stateTypeIri.Aborting) {
-				System.out.println("ERROR! Could not complete Task " + execution.getCurrentActivityName());
-				throw new BpmnError(ERROR_ABBORTING);
-			} else if (status == stateTypeIri.Aborted) {
-				System.out.println("ERROR! Could not complete Task " + execution.getCurrentActivityName());
-				throw new BpmnError(ERROR_ABBORTED);
-			} else if (status == stateTypeIri.Stopping) {
-				System.out.println("ERROR! Could not complete Task " + execution.getCurrentActivityName());
-				throw new BpmnError(ERROR_STOPPING);
-			} else if (status == stateTypeIri.Stopped) {
-				System.out.println("ERROR! Could not complete Task " + execution.getCurrentActivityName());
-				throw new BpmnError(ERROR_STOPPED);
-			} else if (status == stateTypeIri.Holding) {
-				System.out.println("ERROR! Could not complete Task " + execution.getCurrentActivityName());
-				throw new BpmnError(ERROR_HOLDING);
-			} else if (status == stateTypeIri.Held) {
-				System.out.println("ERROR! Could not complete Task " + execution.getCurrentActivityName());
-				throw new BpmnError(ERROR_HELD);
+			if (status == stateTypeIri.Complete || status == stateTypeIri.Aborting || status == stateTypeIri.Stopping) {
+				socket.close();
+				HttpResponse outputs = http.createRequest()
+				        .post()
+				        .url(EXECUTION_URL)
+				        .contentType(CONTENT_TYPE)
+				        .payload(gson.toJson(getOutputs))
+			        .execute();
+				System.out.println("Request getOutputs: \n" + gson.toJson(getOutputs));
+				System.out.println("Response getOutputs: \n" + outputs.getResponse());
+				Type skillResponseType = new TypeToken<ArrayList<SkillResponse>>(){}.getType();
+				List<SkillResponse> skillResponse = gson.fromJson(outputs.getResponse(), skillResponseType);
+				
+				/***** Return outputs *****/
+				for (int i=0; i<skillResponse.size(); i++) {
+					execution.setVariable(skillResponse.get(i).getIri(), skillResponse.get(i).getValue());
+				}
+				
+				/***** Error handling *****/
+				if (status == stateTypeIri.Complete) {
+					System.out.println("Task " + execution.getCurrentActivityName() + " completed");
+					break;
+				} else if (status == stateTypeIri.Aborting) {
+					System.out.println("ERROR! Could not complete Task " + execution.getCurrentActivityName());
+					throw new BpmnError(ERROR_ABBORTING);
+				} else if (status == stateTypeIri.Stopping) {
+					System.out.println("ERROR! Could not complete Task " + execution.getCurrentActivityName());
+					throw new BpmnError(ERROR_STOPPING);
+				} 	
 			}
 			Thread.sleep(1000);
 		}
-		
-		/***** Return outputs *****/
-		Random rando = new Random();
-		execution.setVariable("output1","Zufällige Zahl " + rando.nextInt());
-		execution.setVariable("output2","Zufällige Zahl " + rando.nextInt());
-		execution.setVariable("output3","Zufällige Zahl " + rando.nextInt());
-		execution.setVariable("output4","Zufällige Zahl " + rando.nextInt());
 		
 		/***** Resetting Task *****/
 		if(isSelfResetting) { 
@@ -161,13 +168,7 @@ public class MyJavaDelegate implements JavaDelegate {
 			        .contentType(CONTENT_TYPE)
 			        .payload(gson.toJson(skillParameter))
 		        .execute();
-			while (status != stateTypeIri.Idle) {
-				Thread.sleep(1000);
-			}
 		}
-		
-		// Close WebSocket
-		socket.close();
 	}
-
+	
 }
