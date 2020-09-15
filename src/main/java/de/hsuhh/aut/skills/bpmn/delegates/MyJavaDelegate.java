@@ -10,7 +10,7 @@ import org.camunda.connect.httpclient.HttpResponse;
 import com.google.gson.*;
 import com.google.gson.reflect.TypeToken;
 
-import org.json.JSONArray;
+//import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -25,26 +25,26 @@ import java.util.List;
 
 public class MyJavaDelegate implements JavaDelegate {
 	
-	// Hard coded variables
-	private static String HOST_URL = "http://localhost:9090";
-	private static String WEBSOCKET_TOPIC = "skills/state-changed";
-	private static String NEW_STATE_TYPE_IRI = "newStateTypeIri";
-	private static String CONNECTOR = "http-connector";
-	private static String EXECUTION_URL = "http://localhost:9090/api/skill-executions";
-	private static String COMMAND_TYPE_IRI_RESET = "http://www.hsu-ifa.de/ontologies/ISA-TR88#Reset_Command";
-	private static String COMMAND_TYPE_IRI_GETOUTPUTS = "http://www.hsu-ifa.de/ontologies/capability-model#GetOutputs";
-	private static String CONTENT_TYPE = "application/json";
-	
-	// Error codes
-	private static String ERROR_ABBORTING = "Error_Status_Abborting";
-	private static String ERROR_STOPPING = "Error_Status_Stopping";
-	
-	// Loading during runtime
-	private Boolean isSelfResetting = false;
-	private stateTypeIri status = stateTypeIri.Tba;
-	
+	int check = 0;
 	
 	public void execute(DelegateExecution execution) throws Exception {
+		
+		// Hard coded variables
+		final String HOST_URL = "http://localhost:9090";
+		final String WEBSOCKET_TOPIC = "skills/state-changed";
+		final String NEW_STATE_TYPE_IRI = "newStateTypeIri";
+		final String CONNECTOR = "http-connector";
+		final String EXECUTION_URL = "http://localhost:9090/api/skill-executions";
+		final String COMMAND_TYPE_IRI_RESET = "http://www.hsu-ifa.de/ontologies/ISA-TR88#Reset_Command";
+		final String COMMAND_TYPE_IRI_GETOUTPUTS = "http://www.hsu-ifa.de/ontologies/capability-model#GetOutputs";
+		final String CONTENT_TYPE = "application/json";
+		
+		// Error codes
+		final String ERROR_ABORTING = "Error_Status_Aborting";
+		final String ERROR_STOPPING = "Error_Status_Stopping";
+
+		Boolean isSelfResetting = false;
+		
 
 		/***** Reading variables and saving them in Class *****/
 		System.out.println("Task " + execution.getCurrentActivityName() + " starting...");
@@ -54,10 +54,9 @@ public class MyJavaDelegate implements JavaDelegate {
 		
 		Gson gson = new Gson();
 		SkillParameter skillParameter = gson.fromJson(execution.getVariable("input_msg").toString(), SkillParameter.class);
-		System.out.println("Execution msg: \n" + gson.toJson(skillParameter));
+		System.out.println("Input msg: \n" + gson.toJson(skillParameter));
 
 		isSelfResetting = Boolean.parseBoolean(execution.getVariable("isSelfResetting").toString());
-		System.out.println("Self resetting activated: " + isSelfResetting);
 		
 		/***** WebSocket *****/
 		IO.Options options = new IO.Options();
@@ -78,23 +77,19 @@ public class MyJavaDelegate implements JavaDelegate {
 			  /***** Get status *****/
 			  JSONObject json_reply = (JSONObject)args[0];
 			  try {
-				  if(json_reply.getString(NEW_STATE_TYPE_IRI).contains(stateTypeIri.Idle.toString())) {status = stateTypeIri.Idle;}
-				  if(json_reply.getString(NEW_STATE_TYPE_IRI).contains(stateTypeIri.Starting.toString())) {status = stateTypeIri.Starting;}
-				  if(json_reply.getString(NEW_STATE_TYPE_IRI).contains(stateTypeIri.Execute.toString())) {status = stateTypeIri.Execute;}
-				  if(json_reply.getString(NEW_STATE_TYPE_IRI).contains(stateTypeIri.Completing.toString())) {status = stateTypeIri.Completing;}
-				  if(json_reply.getString(NEW_STATE_TYPE_IRI).contains(stateTypeIri.Complete.toString())) {status = stateTypeIri.Complete;}
-				  if(json_reply.getString(NEW_STATE_TYPE_IRI).contains(stateTypeIri.Held.toString())) {status = stateTypeIri.Held;}
-				  if(json_reply.getString(NEW_STATE_TYPE_IRI).contains(stateTypeIri.Holding.toString())) {status = stateTypeIri.Holding;}
-				  if(json_reply.getString(NEW_STATE_TYPE_IRI).contains(stateTypeIri.Stopping.toString())) {status = stateTypeIri.Stopping;}
-				  if(json_reply.getString(NEW_STATE_TYPE_IRI).contains(stateTypeIri.Stopped.toString())) {status = stateTypeIri.Stopped;}
-				  if(json_reply.getString(NEW_STATE_TYPE_IRI).contains(stateTypeIri.Aborting.toString())) {status = stateTypeIri.Aborting;}
-				  if(json_reply.getString(NEW_STATE_TYPE_IRI).contains(stateTypeIri.Aborted.toString())) {status = stateTypeIri.Aborted;}
-				  if(json_reply.getString(NEW_STATE_TYPE_IRI).contains(stateTypeIri.Resetting.toString())) {status = stateTypeIri.Resetting;}
+				  if(json_reply.getString(NEW_STATE_TYPE_IRI).contains("Complete")) {
+					  check = 1;
+				  }
+				  if(json_reply.getString(NEW_STATE_TYPE_IRI).contains("Stopping")) {
+					  check = 2;
+				  }
+				  if(json_reply.getString(NEW_STATE_TYPE_IRI).contains("Aborting")) {
+					  check = 3;
+				  }
 				} catch (JSONException e) {
 					e.printStackTrace();
 					System.out.println("ERROR! Could not find " + NEW_STATE_TYPE_IRI + " in response-json. Listening to " + WEBSOCKET_TOPIC + " topic");
 				}
-				System.out.println("Status: " + status.toString());
 		  }
 		}).on(Socket.EVENT_DISCONNECT, new Emitter.Listener() {
 		  @Override
@@ -103,10 +98,7 @@ public class MyJavaDelegate implements JavaDelegate {
 			  client.dispatcher().executorService().shutdown();
 		  }
 		});
-		
 		socket.connect();
-		Thread.sleep(5000);
-		if (!socket.connected()){System.out.println("ERROR! Socket is not connected");}
 		
 		/***** Send json *****/
 		HttpConnector http = Connectors.getConnector(CONNECTOR);
@@ -116,46 +108,47 @@ public class MyJavaDelegate implements JavaDelegate {
 		        .contentType(CONTENT_TYPE)
 		        .payload(gson.toJson(skillParameter))
 	        .execute();
-		System.out.println("Response execution: \n" + response);
 		System.out.println("Sending http request complete");
 		
-		/***** Keep thread alive until complete or aborted *****/ 
+		if (!socket.connected()){System.out.println("ERROR! Socket is not connected");}
+		
+		/***** Keep thread alive until completed, stopping or aborting *****/ 
+		while (check == 0) {
+				Thread.sleep(2000);
+				System.out.println("Waiting for completion of task...");
+		}
+		
+		/***** Return outputs *****/
 		SkillParameter getOutputs = new SkillParameter();
 		getOutputs.setCommandTypeIri(COMMAND_TYPE_IRI_GETOUTPUTS);
 		getOutputs.setSkillIri(skillParameter.getSkillIri());
+		HttpResponse outputs = http.createRequest()
+		        .post()
+		        .url(EXECUTION_URL)
+		        .contentType(CONTENT_TYPE)
+		        .payload(gson.toJson(getOutputs))
+	        .execute();
+		System.out.println("Request getOutputs: \n" + gson.toJson(getOutputs));
+		System.out.println("Response getOutputs: \n" + outputs.getResponse());
+		Type skillResponseType = new TypeToken<ArrayList<SkillResponse>>(){}.getType();
+		List<SkillResponse> skillResponse = gson.fromJson(outputs.getResponse(), skillResponseType);
+		for (int i=0; i<skillResponse.size(); i++) {
+			execution.setVariable(skillResponse.get(i).getIri(), skillResponse.get(i).getValue());
+		}
 		
-		while (true) {
-			if (status == stateTypeIri.Complete || status == stateTypeIri.Aborting || status == stateTypeIri.Stopping) {
-				socket.close();
-				HttpResponse outputs = http.createRequest()
-				        .post()
-				        .url(EXECUTION_URL)
-				        .contentType(CONTENT_TYPE)
-				        .payload(gson.toJson(getOutputs))
-			        .execute();
-				System.out.println("Request getOutputs: \n" + gson.toJson(getOutputs));
-				System.out.println("Response getOutputs: \n" + outputs.getResponse());
-				Type skillResponseType = new TypeToken<ArrayList<SkillResponse>>(){}.getType();
-				List<SkillResponse> skillResponse = gson.fromJson(outputs.getResponse(), skillResponseType);
-				
-				/***** Return outputs *****/
-				for (int i=0; i<skillResponse.size(); i++) {
-					execution.setVariable(skillResponse.get(i).getIri(), skillResponse.get(i).getValue());
-				}
-				
-				/***** Error handling *****/
-				if (status == stateTypeIri.Complete) {
-					System.out.println("Task " + execution.getCurrentActivityName() + " completed");
-					break;
-				} else if (status == stateTypeIri.Aborting) {
-					System.out.println("ERROR! Could not complete Task " + execution.getCurrentActivityName());
-					throw new BpmnError(ERROR_ABBORTING);
-				} else if (status == stateTypeIri.Stopping) {
-					System.out.println("ERROR! Could not complete Task " + execution.getCurrentActivityName());
-					throw new BpmnError(ERROR_STOPPING);
-				} 	
-			}
-			Thread.sleep(1000);
+		/***** Error handling *****/
+		if (check == 1) {
+			System.out.println("Task " + execution.getCurrentActivityName() + " completed");
+		}
+		if (check == 2) {
+			System.out.println("STOPPING ERROR! Could not complete Task " + execution.getCurrentActivityName());
+			socket.close();
+			throw new BpmnError(ERROR_STOPPING);
+		}
+		if (check == 3) {
+			System.out.println("ABORTING ERROR! Could not complete Task " + execution.getCurrentActivityName());
+			socket.close();
+			throw new BpmnError(ERROR_ABORTING);
 		}
 		
 		/***** Resetting Task *****/
@@ -169,6 +162,8 @@ public class MyJavaDelegate implements JavaDelegate {
 			        .payload(gson.toJson(skillParameter))
 		        .execute();
 		}
+		socket.close();
+		Thread.sleep(2000);
 	}
 	
 }
