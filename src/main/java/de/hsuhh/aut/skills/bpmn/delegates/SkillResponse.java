@@ -1,5 +1,7 @@
 package de.hsuhh.aut.skills.bpmn.delegates;
 
+
+// TODO: This should be aligned with the parameters class. There is no need to have two classes
 public class SkillResponse {
 	private String iri;
 	private String name;

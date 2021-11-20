@@ -2,7 +2,7 @@ package de.hsuhh.aut.skills.bpmn.delegates;
 
 //import de.hsuhh.aut.skills.bpmn.delegates.Parameters;
 
-public class SkillParameter {
+public class ExecutionRequest {
 	// variables
 	private String skillIri;
 	private String commandTypeIri;
