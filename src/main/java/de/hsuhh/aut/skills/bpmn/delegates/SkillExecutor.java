@@ -42,7 +42,6 @@ public class SkillExecutor implements JavaDelegate {
 		final String ERROR_ABORTING = "Error_Status_Aborting";
 		final String ERROR_STOPPING = "Error_Status_Stopping";
 
-		Boolean isSelfResetting = false;
 
 		/***** Reading variables and deserialize them *****/
 		System.out.println("Task " + execution.getCurrentActivityName() + " starting...");
@@ -54,9 +53,8 @@ public class SkillExecutor implements JavaDelegate {
 		ExecutionRequest executionRequest = gson.fromJson(execution.getVariable("executionRequest").toString(), ExecutionRequest.class);
 		System.out.println("Input msg: \n" + gson.toJson(executionRequest));
 
-		isSelfResetting = Boolean.parseBoolean(execution.getVariable("isSelfResetting").toString());
+		Boolean selfResetting = executionRequest.isSelfResetting();
 
-		
 		/***** Create websocket listening to state changes *****/
 		CurrentStateSocket socket = new CurrentStateSocket(new URI("ws://localhost:9091/skills"), lockObject);
 
@@ -91,13 +89,15 @@ public class SkillExecutor implements JavaDelegate {
 		HttpResponse outputs = http.createRequest().post().url(EXECUTION_URL).contentType(CONTENT_TYPE).payload(gson.toJson(getOutputs)).execute();
 		System.out.println("Request getOutputs: \n" + gson.toJson(getOutputs));
 		System.out.println("Response getOutputs: \n" + outputs.getResponse());
-		Type skillResponseType = new TypeToken<ArrayList<SkillResponse>>() {}.getType();
-		List<SkillResponse> skillResponse = gson.fromJson(outputs.getResponse(), skillResponseType);
+		Type skillResponseType = new TypeToken<ArrayList<SkillResponse>>(){}.getType();
+		List<SkillResponse> skillResponses = gson.fromJson(outputs.getResponse(), skillResponseType);
+		
+		
 		// Every output gets set as "<activityID>_<output local name>"
-		for (int i = 0; i < skillResponse.size(); i++) {
+		for (SkillResponse skillResponse : skillResponses) {
 			String activityId = execution.getCurrentActivityId();
-			String variableId = activityId + "_" + skillResponse.get(i).getName();
-			execution.setVariable(variableId, skillResponse.get(i).getValue());
+			String variableId = activityId + "_" + skillResponse.getName();
+			execution.setVariable(variableId, skillResponse.getValue());
 		}
 		
 		/***** Error handling *****/
@@ -120,7 +120,7 @@ public class SkillExecutor implements JavaDelegate {
 		
 
 		/***** Reset task if selfResetting *****/
-		if (isSelfResetting) {
+		if (selfResetting) {
 			System.out.println("Self Resetting is activated. Resetting Task " + execution.getCurrentActivityName());
 			executionRequest.setCommandTypeIri(COMMAND_TYPE_IRI_RESET);
 			http.createRequest().post().url(EXECUTION_URL).contentType(CONTENT_TYPE).payload(gson.toJson(executionRequest)).execute();
