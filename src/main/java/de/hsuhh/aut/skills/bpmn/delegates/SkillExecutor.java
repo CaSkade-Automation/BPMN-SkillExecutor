@@ -32,8 +32,8 @@ public class SkillExecutor implements JavaDelegate {
 		final String NEW_STATE_TYPE_IRI = "newStateTypeIri";
 		final String CONNECTOR = "http-connector";
 		final String EXECUTION_URL = "http://localhost:9090/api/skill-executions";
-		final String COMMAND_TYPE_IRI_RESET = "http://www.hsu-ifa.de/ontologies/ISA-TR88#Reset_Command";
-		final String COMMAND_TYPE_IRI_GETOUTPUTS = "http://www.hsu-ifa.de/ontologies/capability-model#GetOutputs";
+		final String COMMAND_TYPE_IRI_RESET = "http://www.hsu-ifa.de/ontologies/ISA-TR88#ResetCommand";
+		final String COMMAND_TYPE_IRI_GETOUTPUTS = "http://www.w3id.org/hsu-aut/cask#GetOutputs";
 		final String CONTENT_TYPE = "application/json";
 		
 		Object lockObject = new Object();
