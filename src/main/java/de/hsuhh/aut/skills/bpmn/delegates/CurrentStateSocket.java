@@ -52,7 +52,7 @@ public class CurrentStateSocket {
     	Type messageType = new TypeToken<SkillMexWebsocketMessage<StateChangeInfo>>(){}.getType();
     	SkillMexWebsocketMessage<StateChangeInfo> stateChangeMessage = gson.fromJson(message, messageType);
     	
-    	if (!stateChangeMessage.getType().equals("changed")) return;
+    	if (!stateChangeMessage.getType().equals("StateChanged")) return;
     	
     	synchronized (lockObject) {
         	String newStateTypeIri = stateChangeMessage.getBody().getStateTypeIri();

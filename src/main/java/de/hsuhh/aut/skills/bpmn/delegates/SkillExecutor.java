@@ -26,9 +26,9 @@ public class SkillExecutor implements JavaDelegate {
 
 	public void execute(DelegateExecution execution) throws Exception {
 
-		// Hard coded variables
-		final String HOST_URL = "http://localhost:9090";
-		final String WEBSOCKET_TOPIC = "skills/state-changed";
+		// Relevant variables
+		final String HOST_URL = "ws://localhost:9091";
+		final String WEBSOCKET_TOPIC = "/skills";
 		final String NEW_STATE_TYPE_IRI = "newStateTypeIri";
 		final String CONNECTOR = "http-connector";
 		final String EXECUTION_URL = "http://localhost:9090/api/skill-executions";
@@ -56,7 +56,8 @@ public class SkillExecutor implements JavaDelegate {
 		Boolean selfResetting = executionRequest.isSelfResetting();
 
 		/***** Create websocket listening to state changes *****/
-		CurrentStateSocket socket = new CurrentStateSocket(new URI("ws://localhost:9091/skills"), lockObject);
+		String socketUrl = HOST_URL + WEBSOCKET_TOPIC;
+		CurrentStateSocket socket = new CurrentStateSocket(new URI(socketUrl), lockObject);
 
 		/***** Send actual execution request *****/
 		HttpConnector http = Connectors.getConnector(CONNECTOR);
